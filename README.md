@@ -1,25 +1,21 @@
-# Sales Summary SPA
+# Sales Summary App
 
 ## Overview
-A single-page application that:
-- Loads Bootstrap 5 from jsdelivr CDN.
-- Fetches data.csv from the same directory (attachment).
-- Sums the values of the Sales column.
-- Sets the document title to "Sales Summary {seed}" (defaults to "SAMPLE-SEED").
-- Displays the total inside the element with id "total-sales".
+A single-page web app that:
+- Sets the document title to “Sales Summary SAMPLE-SEED”.
+- Fetches `data.csv` (attached alongside the page).
+- Sums the values in its `Sales` column.
+- Displays the numeric total inside the `#total-sales` element.
+- Loads Bootstrap 5 from jsDelivr for styling.
 
 ## Setup
 1. Place `index.html` and `data.csv` in the same directory.
-2. Serve the directory with any static server, for example:
-   - Python: `python3 -m http.server 8080`
+2. Serve the folder over a local web server (recommended to avoid browser file:// fetch restrictions). For example:
+   - Python 3: `python -m http.server 8080`
    - Node (serve): `npx serve .`
-   - Or open `index.html` directly in a modern browser.
-
-No build step is required.
+   - VS Code Live Server: Start server in this folder.
 
 ## Usage
-- Open the app in a browser. It will fetch `data.csv`, sum the Sales column, and display the total.
-- Title seeding:
-  - You can pass a seed via URL query, e.g. `index.html?seed=MY-SEED`.
-  - If no seed is provided, it defaults to `SAMPLE-SEED`.
-- Ensure `data.csv` includes a header row with a "Sales" column (case-insensitive).
+1. Open `http://localhost:8080` (or your server URL).
+2. The page will load `data.csv`, sum the `Sales` column, and display the total in the large number next to “Total:”.
+3. Ensure `data.csv` is formatted as CSV with the sales values in the second column. The first row may be a header (e.g., `Product,Sales`).
