@@ -1,0 +1,123 @@
+index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sales Summary</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <style>
+    body { background: #f8f9fa; }
+    #total-sales { font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <h1 class="h4 mb-4" id="page-title">Sales Summary</h1>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-muted">Total Sales</span>
+          <span id="total-sales">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="status" class="small text-muted mt-3"></div>
+  </div>
+
+  <script>
+    (function () {
+      function resolveSeed() {
+        try {
+          const qs = new URLSearchParams(location.search);
+          const seedFromQuery = qs.get('seed');
+          const seedFromHash = new URLSearchParams((location.hash || '').replace(/^#/, '')).get('seed');
+          const seedFromGlobal = window.SEED || window.seed || window.__SEED__;
+          return seedFromQuery || seedFromHash || seedFromGlobal || 'SAMPLE-SEED';
+        } catch {
+          return 'SAMPLE-SEED';
+        }
+      }
+
+      const seed = resolveSeed();
+      document.title = `Sales Summary ${seed}`;
+      const pageTitle = document.getElementById('page-title');
+      if (pageTitle) pageTitle.textContent = `Sales Summary ${seed}`;
+
+      const statusEl = document.getElementById('status');
+      const totalEl = document.getElementById('total-sales');
+
+      function parseCSVLine(line) {
+        const out = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+            else { inQuotes = !inQuotes; }
+          } else if (ch === ',' && !inQuotes) {
+            out.push(cur);
+            cur = '';
+          } else {
+            cur += ch;
+          }
+        }
+        out.push(cur);
+        return out.map(s => s.trim());
+      }
+
+      function safeNumber(val) {
+        if (val == null) return NaN;
+        const cleaned = String(val).replace(/[^0-9eE+\-\.]/g, '');
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? NaN : num;
+      }
+
+      async function loadAndSum() {
+        try {
+          statusEl.textContent = 'Loading data.csv...';
+          const res = await fetch('data.csv', { cache: 'no-store' });
+          if (!res.ok) throw new Error(`Failed to fetch data.csv (${res.status})`);
+          const text = await res.text();
+
+          const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+          if (lines.length === 0) {
+            totalEl.textContent = '0';
+            statusEl.textContent = 'No data rows found.';
+            return;
+          }
+
+          const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, ''));
+          const salesIdx = headers.findIndex(h => /^sales$/i.test(h));
+          if (salesIdx === -1) {
+            totalEl.textContent = '0';
+            statusEl.textContent = 'Sales column not found.';
+            return;
+          }
+
+          let total = 0;
+          for (let i = 1; i < lines.length; i++) {
+            const cols = parseCSVLine(lines[i]);
+            const n = safeNumber(cols[salesIdx]);
+            if (!isNaN(n)) total += n;
+          }
+
+          // Display as plain number; drop trailing .00 for neatness
+          const display = Number.isFinite(total) ? (Math.round((total + Number.EPSILON) * 100) / 100).toString() : '0';
+          totalEl.textContent = display;
+          statusEl.textContent = 'Loaded.';
+        } catch (err) {
+          console.error(err);
+          totalEl.textContent = '0';
+          statusEl.textContent = 'Error loading data.csv';
+        }
+      }
+
+      loadAndSum();
+    })();
+  </script>
+</body>
+</html>
