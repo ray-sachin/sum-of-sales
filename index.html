@@ -2,24 +2,27 @@ index.html
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sales Summary SAMPLE-SEED</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding-top: 4rem; }
+    .number { font-variant-numeric: tabular-nums; }
+  </style>
 </head>
 <body class="bg-light">
-  <div class="container py-5">
+  <div class="container">
     <div class="row justify-content-center">
-      <div class="col-md-8 col-lg-6">
+      <div class="col-lg-8">
         <div class="card shadow-sm">
-          <div class="card-body">
-            <h1 class="h4 mb-3">Sales Summary</h1>
-            <p class="text-muted mb-2">Total sales from data.csv</p>
-            <div class="d-flex align-items-baseline gap-2">
-              <span class="fw-semibold">Total:</span>
-              <span id="total-sales" class="display-6">0</span>
+          <div class="card-body p-4">
+            <h1 class="h3 mb-4">Sales Summary SAMPLE-SEED</h1>
+            <div class="d-flex align-items-baseline gap-3">
+              <div class="h4 mb-0">Total:</div>
+              <div id="total-sales" class="display-5 number">0</div>
             </div>
-            <div id="status" class="form-text mt-2"></div>
+            <div id="status" class="mt-3 text-muted small">Loading data.csv…</div>
           </div>
         </div>
       </div>
@@ -27,54 +30,118 @@ index.html
   </div>
 
   <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      // Ensure title matches requirement
+    (function init() {
+      // Ensure the title matches the required seed
       document.title = 'Sales Summary SAMPLE-SEED';
 
       const totalEl = document.getElementById('total-sales');
       const statusEl = document.getElementById('status');
 
-      async function loadAndSumCSV() {
-        try {
-          statusEl.textContent = 'Loading data.csv...';
-          const res = await fetch('data.csv', { cache: 'no-cache' });
-          if (!res.ok) throw new Error(`Failed to load data.csv (${res.status})`);
-          const text = await res.text();
+      function parseCSV(text) {
+        const rows = [];
+        let row = [];
+        let field = '';
+        let inQuotes = false;
 
-          // Parse CSV (simple parser for comma-separated, no quoted commas handling required here)
-          const lines = text.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
-          if (lines.length === 0) {
-            totalEl.textContent = '0';
-            statusEl.textContent = 'No data found.';
-            return;
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const next = text[i + 1];
+
+          if (char === '"') {
+            if (inQuotes && next === '"') {
+              field += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            row.push(field);
+            field = '';
+          } else if ((char === '\n' || char === '\r') && !inQuotes) {
+            if (char === '\r' && next === '\n') i++; // handle CRLF
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = '';
+          } else {
+            field += char;
+          }
+        }
+        // Push last field/row if any content remains
+        if (field.length > 0 || row.length > 0) {
+          row.push(field);
+          rows.push(row);
+        }
+        // Remove any trailing empty rows
+        return rows.filter(r => r.some(cell => String(cell).trim() !== ''));
+      }
+
+      function toNumber(val) {
+        let s = String(val ?? '').trim();
+        if (!s) return 0;
+        let negative = false;
+        if (/^\(.*\)$/.test(s)) {
+          negative = true;
+          s = s.slice(1, -1);
+        }
+        // Remove common thousands separators and spaces
+        s = s.replace(/[\s,]+/g, '');
+        // Strip currency and any non-numeric except signs, dot, and exponent
+        s = s.replace(/[^0-9.\-+eE]/g, '');
+        const n = parseFloat(s);
+        if (Number.isFinite(n)) return negative ? -n : n;
+        return 0;
+      }
+
+      async function loadAndSum() {
+        try {
+          const res = await fetch('data.csv', { cache: 'no-store' });
+          if (!res.ok) throw new Error('Failed to fetch data.csv');
+          const text = await res.text();
+          const rows = parseCSV(text);
+          if (rows.length === 0) {
+            throw new Error('CSV appears empty');
           }
 
-          // Determine if first row is a header by checking if the second field is numeric
-          const rows = lines.map(l => l.split(','));
-          let startIndex = 0;
-          const firstVal = rows[0][1] !== undefined ? parseFloat(rows[0][1].trim()) : NaN;
-          if (Number.isNaN(firstVal)) startIndex = 1;
+          // Determine Sales column index
+          const header = rows[0].map(h => String(h).trim());
+          const headerLower = header.map(h => h.toLowerCase());
+          let salesIdx = headerLower.indexOf('sales');
+          let dataStart = 0;
+
+          if (salesIdx !== -1) {
+            dataStart = 1; // header present
+          } else {
+            // No explicit "Sales" header; assume second column if available
+            salesIdx = header.length > 1 ? 1 : 0;
+            dataStart = 0;
+          }
 
           let total = 0;
-          for (let i = startIndex; i < rows.length; i++) {
-            const cols = rows[i];
-            if (!cols || cols.length < 2) continue;
-            const v = parseFloat(cols[1].trim());
-            if (!Number.isNaN(v)) total += v;
+          for (let i = dataStart; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length <= salesIdx) continue;
+            const val = toNumber(row[salesIdx]);
+            if (Number.isFinite(val)) {
+              total += val;
+            }
           }
 
-          // Output numeric-only string for reliable parsing in tests
-          totalEl.textContent = String(total);
-          statusEl.textContent = 'Loaded.';
+          // Display raw numeric total (no thousands separators)
+          // Keep up to two decimals if needed, otherwise integer
+          const display =
+            Math.abs(total % 1) < 1e-12 ? String(Math.round(total)) : total.toFixed(2);
+
+          totalEl.textContent = display;
+          statusEl.textContent = 'Loaded data.csv successfully.';
         } catch (err) {
           console.error(err);
-          totalEl.textContent = '0';
-          statusEl.textContent = 'Error loading data.csv.';
+          statusEl.textContent = 'Error: ' + (err && err.message ? err.message : 'Unable to load CSV');
         }
       }
 
-      loadAndSumCSV();
-    });
+      loadAndSum();
+    })();
   </script>
 </body>
 </html>
